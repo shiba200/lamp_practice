@@ -14,10 +14,13 @@ if(is_logined() === false){
 $db = get_db_connect();
 $user = get_login_user($db);
 
-
 $item_id = get_post('item_id');
+$token = get_post('token');
+$result = is_valid_csrf_token($token);
 
-if(add_cart($db,$user['user_id'], $item_id)){
+if($result !== true){
+  set_error('不正な操作が行われました。');
+} else if(add_cart($db,$user['user_id'], $item_id)){
   set_message('カートに商品を追加しました。');
 } else {
   set_error('カートの更新に失敗しました。');
