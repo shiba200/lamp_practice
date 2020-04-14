@@ -26,5 +26,6 @@ $user = get_login_user($db);
 // PDOを利用して商品一覧用のデータを取得
 $items = get_open_items($db);
 
+$token = get_csrf_token();
 // ビューの読み込み
 include_once VIEW_PATH . 'index_view.php';
