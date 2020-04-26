@@ -105,6 +105,7 @@ function purchase_carts($db, $carts){
   if(validate_cart_purchase($carts) === false){
     return false;
   }
+  $db->beginTransaction();
   foreach($carts as $cart){
     if(update_item_stock(
         $db, 
@@ -112,10 +113,17 @@ function purchase_carts($db, $carts){
         $cart['stock'] - $cart['amount']
       ) === false){
       set_error($cart['name'] . 'の購入に失敗しました。');
-    }
+      }
   }
   
   delete_user_carts($db, $carts[0]['user_id']);
+  createHistory($db, $carts);
+
+  if (has_error()){
+    $db->rollback();
+  } else {
+    $db->commit();
+  }
 }
 
 function delete_user_carts($db, $user_id){
@@ -157,3 +165,93 @@ function validate_cart_purchase($carts){
   return true;
 }
 
+function insert_history($db, $user_id, $total){
+  $sql = "
+    INSERT INTO
+      history(
+        user_id,
+        total
+      )
+    VALUES(?, ?)
+  ";
+
+  return execute_query($db, $sql, [$user_id, $total]);
+}
+
+function insert_detail($db, $history_id, $item_id, $price, $amount){
+  $sql = "
+    INSERT INTO
+      detail(
+        history_id,
+        item_id,
+        price,
+        amount
+      )
+    VALUES(?, ?, ?, ?)
+  ";
+
+  return execute_query($db, $sql, [$history_id, $item_id, $price, $amount]);
+}
+
+function createHistory($db, $carts){
+  $total = sum_carts($carts);
+  if (insert_history($db, $carts[0]['user_id'], $total) === true){
+    $id = $db->lastInsertId();
+    foreach($carts as $cart){
+      if (insert_detail($db, $id, $cart['item_id'], $cart['price'], $cart['amount'])===false){
+        set_error($cart['name'] . 'の購入明細の作成に失敗しました');
+      }
+    }
+  } else {
+    set_error('購入履歴の作成に失敗しました');
+  }
+  if (has_error()){
+    return false;
+  } else {
+    return true;
+  }
+}
+
+function get_history($db, $user_id = ''){
+  $param=[];
+  $sql = "
+    SELECT
+      *
+    FROM
+      history
+  ";
+  if($user_id !== ''){
+    $sql .= "where user_id=?";
+    $param[]=$user_id;
+  }
+  $sql .= " order by created desc";
+  return fetch_all_query($db, $sql, $param);
+}
+
+function get_detail($db, $history_id, $user_id=""){
+  $param = [$history_id];
+  $sql = "
+    SELECT
+      items.item_id,
+      items.name,
+      detail.price,
+      detail.amount
+    FROM
+      items
+    JOIN
+      detail
+    ON
+      items.item_id = detail.item_id
+    JOIN
+      history
+    ON
+     detail.history_id = history.history_id
+    where
+      detail.history_id = ?
+  ";
+  if($user_id !== ''){
+    $sql .= " and user_id=?";
+    $param[]=$user_id;
+  }
+  return fetch_all_query($db, $sql, $param);
+}
