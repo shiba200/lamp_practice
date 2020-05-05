@@ -27,5 +27,8 @@ $user = get_login_user($db);
 $items = get_open_items($db);
 
 $token = get_csrf_token();
+
+$item_ranking = item_ranking($db);
+
 // ビューの読み込み
 include_once VIEW_PATH . 'index_view.php';
